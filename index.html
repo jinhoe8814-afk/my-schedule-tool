@@ -316,6 +316,7 @@
   // ---------- Google Identity / Calendar ----------
   let tokenClient = null;
   let accessToken = null;
+  let silentAttempt = false;
 
   function initGoogle(){
     const clientId = localStorage.getItem(LS.client);
@@ -324,15 +325,39 @@
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/calendar',
       callback: (resp)=>{
-        if(resp.error){ toast('구글 인증 실패: '+resp.error); return; }
+        const wasSilent = silentAttempt;
+        silentAttempt = false;
+        if(resp.error){
+          if(!wasSilent) toast('구글 인증 실패: '+resp.error);
+          return;
+        }
         accessToken = resp.access_token;
         setConnected(true);
-        toast('Google 캘린더 연결됨');
+        if(!wasSilent) toast('Google 캘린더 연결됨');
         loadCalendarList();
       }
     });
   }
-  window.addEventListener('load', ()=> setTimeout(initGoogle, 400));
+
+  // 페이지를 열 때 클라이언트 ID가 저장돼 있으면 자동으로(조용히) 연결을 시도합니다.
+  // 브라우저 팝업 차단 정책상 항상 성공하지는 않을 수 있고, 실패해도 에러를 띄우지 않습니다.
+  window.addEventListener('load', ()=>{
+    let tries = 0;
+    const iv = setInterval(()=>{
+      tries++;
+      if(!tokenClient) initGoogle();
+      if(tokenClient){
+        clearInterval(iv);
+        const clientId = localStorage.getItem(LS.client);
+        if(clientId){
+          silentAttempt = true;
+          tokenClient.requestAccessToken({prompt:''});
+        }
+      } else if(tries > 10){
+        clearInterval(iv);
+      }
+    }, 300);
+  });
 
   function setConnected(on){
     $('gdot').classList.toggle('on', on);
@@ -343,6 +368,7 @@
     const clientId = localStorage.getItem(LS.client);
     if(!clientId){ toast('설정에서 Google 클라이언트 ID를 먼저 입력하세요'); $('btnSettings').click(); return; }
     if(!tokenClient) initGoogle();
+    silentAttempt = false;
     if(tokenClient) tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
   };
 
