@@ -47,6 +47,8 @@
   }
   .dot{width:7px;height:7px;border-radius:50%;background:#CFCFCF;}
   .dot.on{background:var(--accent);}
+  .dot.connecting{background:#E0A72E; animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
   .btn{
     font-family:'Pretendard', sans-serif; font-weight:600; font-size:13.5px;
     border:1px solid var(--line); background:#fff; color:var(--ink);
@@ -328,6 +330,7 @@
         const wasSilent = silentAttempt;
         silentAttempt = false;
         if(resp.error){
+          setConnected(false);
           if(!wasSilent) toast('구글 인증 실패: '+resp.error);
           return;
         }
@@ -351,6 +354,7 @@
         const clientId = localStorage.getItem(LS.client);
         if(clientId){
           silentAttempt = true;
+          setConnected('connecting');
           tokenClient.requestAccessToken({prompt:''});
         }
       } else if(tries > 10){
@@ -359,9 +363,19 @@
     }, 300);
   });
 
-  function setConnected(on){
-    $('gdot').classList.toggle('on', on);
-    $('gstatus').textContent = on ? '캘린더 연결됨' : '캘린더 미연결';
+  function setConnected(state){
+    // state: true(연결됨) / false(미연결) / 'connecting'(연결 중)
+    const dot = $('gdot');
+    dot.classList.remove('on','connecting');
+    if(state === 'connecting'){
+      dot.classList.add('connecting');
+      $('gstatus').textContent = '연결 중…';
+    } else if(state){
+      dot.classList.add('on');
+      $('gstatus').textContent = '캘린더 연결됨';
+    } else {
+      $('gstatus').textContent = '캘린더 미연결';
+    }
   }
 
   $('btnGoogle').onclick = ()=>{
@@ -369,7 +383,10 @@
     if(!clientId){ toast('설정에서 Google 클라이언트 ID를 먼저 입력하세요'); $('btnSettings').click(); return; }
     if(!tokenClient) initGoogle();
     silentAttempt = false;
-    if(tokenClient) tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+    if(tokenClient){
+      setConnected('connecting');
+      tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+    }
   };
 
   async function loadCalendarList(){
