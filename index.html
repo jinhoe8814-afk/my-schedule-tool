@@ -148,7 +148,14 @@
   .ledger-item .lt-title{font-weight:600; font-size:14px; margin-bottom:4px;}
   .ledger-item .lt-when{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink); margin-bottom:2px;}
   .ledger-item .lt-loc{font-size:12.5px; color:var(--muted);}
+  .ledger-item .lt-actions{display:flex; align-items:center; justify-content:space-between; margin-top:8px;}
   .ledger-item a{font-size:12px; color:var(--accent); text-decoration:none; font-weight:600;}
+  .lt-delete{
+    background:none; border:none; color:var(--muted); font-size:12px; font-weight:600;
+    cursor:pointer; padding:0; font-family:'Pretendard',sans-serif;
+  }
+  .lt-delete:hover{color:var(--danger);}
+  .lt-delete:disabled{opacity:.5; cursor:not-allowed;}
   .ledger-empty{color:var(--muted); font-size:13px; padding:24px 4px; text-align:center;}
 
   /* Settings modal */
@@ -470,7 +477,7 @@
       const result = await createCalendarEvent(ev);
       btn.classList.add('stamped');
       setTimeout(()=>btn.classList.remove('stamped'), 450);
-      addLedgerItem(ev, result.htmlLink);
+      addLedgerItem(ev, result);
       addMsg('bot', `<span class="tag">등록 완료</span>"${ev.title}" 일정을 "${ev.calendarLabel}"에 등록했습니다.`);
       $('draftCard').style.display='none';
       currentDraft=null;
@@ -483,7 +490,22 @@
     }
   };
 
-  function addLedgerItem(ev, link){
+  async function deleteCalendarEvent(calendarId, eventId){
+    if(!accessToken){ throw new Error('먼저 Google 캘린더를 연결해주세요'); }
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events/'+encodeURIComponent(eventId), {
+      method:'DELETE',
+      headers:{ 'Authorization':'Bearer '+accessToken }
+    });
+    if(res.status === 401){
+      accessToken = null; setConnected(false);
+      throw new Error('로그인이 만료되었습니다. 다시 연결해주세요');
+    }
+    if(!res.ok && res.status !== 410){
+      throw new Error('삭제 실패 ('+res.status+')');
+    }
+  }
+
+  function addLedgerItem(ev, result){
     const empty = document.querySelector('.ledger-empty');
     if(empty) empty.remove();
     const div = document.createElement('div');
@@ -491,12 +513,33 @@
     const dateStr = ev.startISO.split('T')[0];
     const st = ev.startISO.split('T')[1].slice(0,5);
     const et = ev.endISO.split('T')[1].slice(0,5);
+    const link = result && result.htmlLink;
+    const eventId = result && result.id;
     div.innerHTML = `
       <div class="lt-title">${escapeHtml(ev.title)}</div>
       <div class="lt-when">${dateStr} · ${st}–${et}</div>
       <div class="lt-loc">${escapeHtml(ev.calendarLabel||'')}</div>
-      ${link? `<a href="${link}" target="_blank" rel="noopener">캘린더에서 보기 →</a>`:''}
+      <div class="lt-actions">
+        ${link? `<a href="${link}" target="_blank" rel="noopener">캘린더에서 보기 →</a>`:''}
+        <button type="button" class="lt-delete">삭제</button>
+      </div>
     `;
+    const delBtn = div.querySelector('.lt-delete');
+    delBtn.onclick = async ()=>{
+      if(!confirm(`"${ev.title}" 일정을 삭제할까요?`)) return;
+      delBtn.disabled = true; delBtn.textContent = '삭제 중…';
+      try{
+        await deleteCalendarEvent(ev.calendarId, eventId);
+        div.remove();
+        if(!$('ledger').children.length){
+          $('ledger').innerHTML = '<div class="ledger-empty">아직 등록된 일정이 없습니다</div>';
+        }
+        toast('일정을 삭제했습니다');
+      }catch(e){
+        delBtn.disabled = false; delBtn.textContent = '삭제';
+        toast(e.message);
+      }
+    };
     $('ledger').prepend(div);
   }
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
