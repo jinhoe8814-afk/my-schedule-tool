@@ -111,6 +111,11 @@
     font-family:'Pretendard',sans-serif; width:100%; background:#fff;
   }
   .field-row input:focus{outline:none; border-color:var(--accent);}
+  .field-row select{
+    border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:14px;
+    font-family:'Pretendard',sans-serif; width:100%; background:#fff; color:var(--ink);
+  }
+  .field-row select:focus{outline:none; border-color:var(--accent);}
   .draft-actions{display:flex; gap:8px; margin-top:12px; justify-content:flex-end;}
 
   /* Confirm button */
@@ -213,7 +218,7 @@
         <div class="field-row"><label>날짜</label><input id="dDate" type="date"/></div>
         <div class="field-row"><label>시작</label><input id="dStart" type="time"/></div>
         <div class="field-row"><label>종료</label><input id="dEnd" type="time"/></div>
-        <div class="field-row"><label>장소</label><input id="dLoc" placeholder="(선택)"/></div>
+        <div class="field-row"><label>캘린더</label><select id="dCalendar"><option value="primary">기본 캘린더</option></select></div>
         <div class="draft-actions">
           <button class="btn ghost" id="btnCancelDraft">취소</button>
           <button class="stamp-btn" id="btnStamp">캘린더에 등록</button>
@@ -267,7 +272,8 @@
   const LS = {
     key: 'sched_anthropic_key',
     client: 'sched_google_client_id',
-    ledger: 'sched_ledger_v1'
+    ledger: 'sched_ledger_v1',
+    lastCalendar: 'sched_last_calendar'
   };
 
   // ---------- Settings ----------
@@ -309,12 +315,13 @@
     if(!clientId || !window.google || !google.accounts) return;
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/calendar.events',
+      scope: 'https://www.googleapis.com/auth/calendar',
       callback: (resp)=>{
         if(resp.error){ toast('구글 인증 실패: '+resp.error); return; }
         accessToken = resp.access_token;
         setConnected(true);
         toast('Google 캘린더 연결됨');
+        loadCalendarList();
       }
     });
   }
@@ -332,15 +339,36 @@
     if(tokenClient) tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
   };
 
+  async function loadCalendarList(){
+    if(!accessToken) return;
+    try{
+      const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer', {
+        headers:{ 'Authorization':'Bearer '+accessToken }
+      });
+      if(!res.ok) return;
+      const data = await res.json();
+      const sel = $('dCalendar');
+      const prev = localStorage.getItem(LS.lastCalendar);
+      sel.innerHTML = '';
+      (data.items||[]).forEach(cal=>{
+        const opt = document.createElement('option');
+        opt.value = cal.id;
+        opt.textContent = cal.primary ? `${cal.summary} (기본)` : cal.summary;
+        sel.appendChild(opt);
+      });
+      if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+    }catch(e){ /* 목록 로드 실패 시 기본값 유지 */ }
+  }
+
   async function createCalendarEvent(ev){
     if(!accessToken){ throw new Error('먼저 Google 캘린더를 연결해주세요'); }
     const body = {
       summary: ev.title,
-      location: ev.location || undefined,
       start: { dateTime: ev.startISO, timeZone: 'Asia/Seoul' },
       end: { dateTime: ev.endISO, timeZone: 'Asia/Seoul' }
     };
-    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    localStorage.setItem(LS.lastCalendar, ev.calendarId);
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(ev.calendarId)+'/events', {
       method:'POST',
       headers:{ 'Authorization':'Bearer '+accessToken, 'Content-Type':'application/json' },
       body: JSON.stringify(body)
@@ -373,14 +401,13 @@
 반드시 아래 JSON 형식으로만 답하세요. 다른 설명 텍스트를 절대 붙이지 마세요.
 
 일정을 명확히 추출할 수 있으면:
-{"status":"ok","title":"...","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"..." }
+{"status":"ok","title":"...","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM"}
 
 날짜/시간 등 정보가 부족해서 되물어야 하면:
 {"status":"ask","question":"짧은 되묻는 질문 한 문장"}
 
 규칙:
 - end_time이 언급 없으면 start_time+1시간으로 채우세요.
-- location이 없으면 빈 문자열.
 - "다음주 화요일" 같은 상대 표현은 현재 시각 기준으로 정확한 날짜로 계산하세요.
 - title은 간결한 한국어 명사구로.`;
 
@@ -423,7 +450,7 @@
     $('dDate').value = d.date || '';
     $('dStart').value = d.start_time || '';
     $('dEnd').value = d.end_time || '';
-    $('dLoc').value = d.location || '';
+    if(accessToken) loadCalendarList();
     $('draftCard').style.display = 'block';
   }
   $('btnCancelDraft').onclick = ()=>{ $('draftCard').style.display='none'; currentDraft=null; };
@@ -432,7 +459,8 @@
     const btn = $('btnStamp');
     const ev = {
       title: $('dTitle').value.trim() || '(제목 없음)',
-      location: $('dLoc').value.trim(),
+      calendarId: $('dCalendar').value || 'primary',
+      calendarLabel: $('dCalendar').options[$('dCalendar').selectedIndex]?.textContent || '기본 캘린더',
       startISO: `${$('dDate').value}T${$('dStart').value}:00`,
       endISO: `${$('dDate').value}T${$('dEnd').value}:00`
     };
@@ -443,7 +471,7 @@
       btn.classList.add('stamped');
       setTimeout(()=>btn.classList.remove('stamped'), 450);
       addLedgerItem(ev, result.htmlLink);
-      addMsg('bot', `<span class="tag">등록 완료</span>"${ev.title}" 일정을 캘린더에 등록했습니다.`);
+      addMsg('bot', `<span class="tag">등록 완료</span>"${ev.title}" 일정을 "${ev.calendarLabel}"에 등록했습니다.`);
       $('draftCard').style.display='none';
       currentDraft=null;
       toast('캘린더에 등록되었습니다');
@@ -466,7 +494,7 @@
     div.innerHTML = `
       <div class="lt-title">${escapeHtml(ev.title)}</div>
       <div class="lt-when">${dateStr} · ${st}–${et}</div>
-      ${ev.location? `<div class="lt-loc">${escapeHtml(ev.location)}</div>`:''}
+      <div class="lt-loc">${escapeHtml(ev.calendarLabel||'')}</div>
       ${link? `<a href="${link}" target="_blank" rel="noopener">캘린더에서 보기 →</a>`:''}
     `;
     $('ledger').prepend(div);
