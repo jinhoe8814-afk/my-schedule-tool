@@ -556,9 +556,19 @@
   function saveLedgerArray(arr){
     localStorage.setItem(LS.ledger, JSON.stringify(arr.slice(0,300)));
   }
-  function todayStr(){
-    const d = new Date();
+  function localDateStr(d){
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  function todayStr(){
+    return localDateStr(new Date());
+  }
+
+  function restoreLedger(){
+    const t = todayStr();
+    const todays = getLedgerArray().filter(r => r.registeredAt && localDateStr(new Date(r.registeredAt)) === t);
+    if(!todays.length) return;
+    document.querySelector('.ledger-empty')?.remove();
+    todays.forEach(renderLedgerRow);
   }
 
   function addLedgerItem(ev, result){
@@ -569,7 +579,8 @@
       calendarLabel: ev.calendarLabel,
       startISO: ev.startISO,
       endISO: ev.endISO,
-      htmlLink: result && result.htmlLink
+      htmlLink: result && result.htmlLink,
+      registeredAt: new Date().toISOString()
     };
     const arr = getLedgerArray();
     arr.unshift(record);
@@ -614,13 +625,6 @@
     $('ledger').appendChild(div);
   }
 
-  function restoreLedger(){
-    const t = todayStr();
-    const todays = getLedgerArray().filter(r => r.startISO && r.startISO.startsWith(t));
-    if(!todays.length) return;
-    document.querySelector('.ledger-empty')?.remove();
-    todays.forEach(renderLedgerRow);
-  }
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
   // ---------- Send handler ----------
