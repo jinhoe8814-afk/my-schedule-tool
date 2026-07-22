@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>일정 등록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.css"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#FAFAFA;
+    --line:#E7E7E7;
+    --ink:#1A1A1A;
+    --muted:#8A8A8A;
+    --accent:#3355FF;
+    --accent-soft:#EEF1FF;
+    --card:#FFFFFF;
+    --danger:#D8402C;
+    --danger-soft:#FDEEEC;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 20px 80px;}
+
+  header.top{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; margin-bottom:32px; flex-wrap:wrap;
+  }
+  .title-block h1{
+    font-weight:700; font-size:22px; margin:0; letter-spacing:-0.01em;
+  }
+  .title-block .eyebrow{display:none;}
+  .title-block p.sub{margin:4px 0 0; color:var(--muted); font-size:13.5px;}
+
+  .conn-status{
+    display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:#CFCFCF;}
+  .dot.on{background:var(--accent);}
+  .dot.connecting{background:#E0A72E; animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .btn{
+    font-family:'Pretendard', sans-serif; font-weight:600; font-size:13.5px;
+    border:1px solid var(--line); background:#fff; color:var(--ink);
+    padding:8px 14px; border-radius:8px; cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .btn:hover{border-color:#C7C7C7;}
+  .btn:active{transform:scale(.98);}
+  .btn.primary{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .btn.primary:hover{background:#000;}
+  .btn.ghost{background:transparent; border-color:transparent; color:var(--muted);}
+  .btn.ghost:hover{color:var(--ink); border-color:var(--line);}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+
+  .layout{display:grid; grid-template-columns: 1.2fr 0.8fr; gap:20px;}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--card); border-radius:16px; border:1px solid var(--line);
+    padding:22px 22px 18px; position:relative;
+  }
+  .panel h2{
+    font-size:14px; font-weight:700; margin:0 0 16px; color:var(--ink);
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel h2 .num{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--muted);
+    font-weight:500;
+  }
+
+  /* Chat area */
+  #chatlog{
+    display:flex; flex-direction:column; gap:10px;
+    max-height:420px; overflow-y:auto; padding:4px 2px 8px;
+    scrollbar-width:thin;
+  }
+  .msg{max-width:82%; padding:10px 14px; border-radius:14px; font-size:14.5px; line-height:1.55;}
+  .msg.user{align-self:flex-end; background:var(--ink); color:#fff; border-bottom-right-radius:4px;}
+  .msg.bot{align-self:flex-start; background:var(--accent-soft); color:var(--ink); border-bottom-left-radius:4px;}
+  .msg.bot.error{background:var(--danger-soft); color:var(--danger);}
+  .msg .tag{display:block; font-family:'IBM Plex Mono',monospace; font-size:10px; opacity:.6; margin-bottom:3px;}
+
+  .composer{display:flex; gap:8px; margin-top:16px; border-top:1px solid var(--line); padding-top:16px;}
+  .composer textarea{
+    flex:1; resize:none; border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; font-family:inherit; font-size:14.5px; min-height:46px; max-height:120px;
+    background:#fff;
+  }
+  .composer textarea:focus{outline:none; border-color:var(--accent);}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px;}
+
+  /* Draft card */
+  .draft-card{
+    border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:14px;
+    background:#FCFCFD;
+  }
+  .draft-card .dk-label{font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px; display:block;}
+  .field-row{display:grid; grid-template-columns: 60px 1fr; gap:8px; align-items:center; margin-bottom:8px;}
+  .field-row label{font-size:12.5px; color:var(--muted);}
+  .field-row input{
+    border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:14px;
+    font-family:'Pretendard',sans-serif; width:100%; background:#fff;
+  }
+  .field-row input:focus{outline:none; border-color:var(--accent);}
+  .field-row select{
+    border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:14px;
+    font-family:'Pretendard',sans-serif; width:100%; background:#fff; color:var(--ink);
+  }
+  .field-row select:focus{outline:none; border-color:var(--accent);}
+  .draft-actions{display:flex; gap:8px; margin-top:12px; justify-content:flex-end;}
+
+  /* Confirm button */
+  .stamp-btn{
+    position:relative; border:none; background:var(--accent); color:#fff;
+    font-weight:600; font-size:13.5px;
+    padding:9px 16px; border-radius:8px; cursor:pointer;
+    transition:background .15s ease, transform .12s ease;
+  }
+  .stamp-btn:hover{background:#2645E0;}
+  .stamp-btn:active{transform:scale(.97);}
+  .stamp-btn.stamped{animation:stampfx .3s ease;}
+  @keyframes stampfx{
+    0%{transform:scale(1);}
+    45%{transform:scale(1.06);}
+    100%{transform:scale(1);}
+  }
+
+  /* Ledger (right panel) */
+  #ledger{display:flex; flex-direction:column; gap:8px; max-height:560px; overflow-y:auto; padding-right:2px;}
+  .ledger-item{
+    border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    background:#fff; position:relative;
+  }
+  .ledger-item::before{
+    content:"등록됨"; font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600;
+    color:var(--accent); background:var(--accent-soft); border-radius:5px;
+    padding:2px 6px; float:right; letter-spacing:.03em;
+  }
+  .ledger-item .lt-title{font-weight:600; font-size:14px; margin-bottom:4px;}
+  .ledger-item .lt-when{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink); margin-bottom:2px;}
+  .ledger-item .lt-loc{font-size:12.5px; color:var(--muted);}
+  .ledger-item .lt-actions{display:flex; align-items:center; justify-content:space-between; margin-top:8px;}
+  .ledger-item a{font-size:12px; color:var(--accent); text-decoration:none; font-weight:600;}
+  .lt-delete{
+    background:none; border:none; color:var(--muted); font-size:12px; font-weight:600;
+    cursor:pointer; padding:0; font-family:'Pretendard',sans-serif;
+  }
+  .lt-delete:hover{color:var(--danger);}
+  .lt-delete:disabled{opacity:.5; cursor:not-allowed;}
+  .ledger-empty{color:var(--muted); font-size:13px; padding:24px 4px; text-align:center;}
+
+  /* Settings modal */
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(20,20,20,0.4); display:none;
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{
+    background:#fff; border-radius:16px; max-width:480px; width:100%; padding:26px;
+    max-height:86vh; overflow-y:auto;
+  }
+  .modal h3{margin:0 0 4px; font-size:17px;}
+  .modal p.desc{color:var(--muted); font-size:13px; margin:0 0 18px;}
+  .modal label{font-size:13px; font-weight:600; display:block; margin:14px 0 6px;}
+  .modal input[type=text], .modal input[type=password]{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:14px;
+  }
+  .modal input:focus{outline:none; border-color:var(--accent);}
+  .modal .guide{
+    background:var(--bg); border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--ink);
+    margin-top:16px; line-height:1.7; border:1px solid var(--line);
+  }
+  .modal .guide summary{cursor:pointer; font-weight:600; font-size:12.5px;}
+  .modal .guide ol{margin:10px 0 0; padding-left:18px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:20px;}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:10px;}
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px; font-size:13.5px;
+    opacity:0; transition:all .25s ease; z-index:60;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="title-block">
+      <h1>일정 등록</h1>
+      <p class="sub">대화하듯 입력하면 분석해서 구글 캘린더에 등록합니다.</p>
+    </div>
+    <div class="conn-status">
+      <span class="dot" id="gdot"></span><span id="gstatus">캘린더 미연결</span>
+      <button class="btn" id="btnGoogle">Google 연결</button>
+      <button class="btn ghost" id="btnSettings">⚙ 설정</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <h2><span class="num">01</span> 일정 대화</h2>
+      <div id="chatlog"></div>
+      <div class="composer">
+        <textarea id="chatInput" placeholder="예) 다음주 화요일 오후 2시 학부모 상담, 3시까지"></textarea>
+        <button class="btn primary" id="btnSend">보내기</button>
+      </div>
+      <p class="hint">Enter로 전송 · Shift+Enter 줄바꿈. 날짜·시간이 애매하면 되물어봅니다.</p>
+
+      <div class="draft-card" id="draftCard" style="display:none;">
+        <span class="dk-label">등록 전 확인 — 수정 가능</span>
+        <div class="field-row"><label>제목</label><input id="dTitle"/></div>
+        <div class="field-row"><label>날짜</label><input id="dDate" type="date"/></div>
+        <div class="field-row"><label>시작</label><input id="dStart" type="time"/></div>
+        <div class="field-row"><label>종료</label><input id="dEnd" type="time"/></div>
+        <div class="field-row"><label>캘린더</label><select id="dCalendar"><option value="primary">기본 캘린더</option></select></div>
+        <div class="draft-actions">
+          <button class="btn ghost" id="btnCancelDraft">취소</button>
+          <button class="stamp-btn" id="btnStamp">캘린더에 등록</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">02</span> 오늘 등록된 일정</h2>
+      <div id="ledger"><div class="ledger-empty">아직 등록된 일정이 없습니다</div></div>
+    </section>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>설정</h3>
+    <p class="desc">API 키는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.</p>
+
+    <label>Anthropic API 키</label>
+    <input type="password" id="setAnthropicKey" placeholder="sk-ant-..." />
+
+    <label>Google OAuth 클라이언트 ID</label>
+    <input type="text" id="setGoogleClientId" placeholder="xxxxxxx.apps.googleusercontent.com" />
+
+    <details class="guide">
+      <summary>처음 설정하시나요? (열어서 순서 확인)</summary>
+      <ol>
+        <li><b>Anthropic 키</b>: console.anthropic.com → API Keys → 새 키 생성 후 위에 붙여넣기</li>
+        <li><b>Google Cloud Console</b>(console.cloud.google.com)에서 새 프로젝트 생성</li>
+        <li>「API 및 서비스 → 라이브러리」에서 <b>Google Calendar API</b> 사용 설정</li>
+        <li>「OAuth 동의 화면」에서 외부 선택 → 앱 이름 입력 → 본인 이메일을 테스트 사용자로 추가</li>
+        <li>「사용자 인증 정보 → 사용자 인증 정보 만들기 → OAuth 클라이언트 ID」<br>애플리케이션 유형: <b>웹 애플리케이션</b></li>
+        <li><b>승인된 자바스크립트 원본</b>에 이 앱을 여는 주소를 정확히 추가<br>(예: GitHub Pages라면 https://아이디.github.io)</li>
+        <li>생성된 클라이언트 ID를 위 칸에 붙여넣기</li>
+      </ol>
+    </details>
+
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnCloseModal">닫기</button>
+      <button class="btn primary" id="btnSaveModal">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const LS = {
+    key: 'sched_anthropic_key',
+    client: 'sched_google_client_id',
+    ledger: 'sched_ledger_v1',
+    lastCalendar: 'sched_last_calendar'
+  };
+
+  // ---------- Settings ----------
+  function loadSettings(){
+    $('setAnthropicKey').value = localStorage.getItem(LS.key) || '';
+    $('setGoogleClientId').value = localStorage.getItem(LS.client) || '';
+  }
+  $('btnSettings').onclick = ()=>{ loadSettings(); $('modalBg').classList.add('show'); };
+  $('btnCloseModal').onclick = ()=> $('modalBg').classList.remove('show');
+  $('btnSaveModal').onclick = ()=>{
+    localStorage.setItem(LS.key, $('setAnthropicKey').value.trim());
+    localStorage.setItem(LS.client, $('setGoogleClientId').value.trim());
+    $('modalBg').classList.remove('show');
+    initGoogle();
+    toast('설정을 저장했습니다');
+  };
+
+  function toast(msg){
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+
+  // ---------- Chat log ----------
+  const conversation = []; // {role, content} for Claude context
+  function addMsg(role, html, isError){
+    const div = document.createElement('div');
+    div.className = 'msg ' + (role==='user'?'user':'bot') + (isError?' error':'');
+    div.innerHTML = html;
+    $('chatlog').appendChild(div);
+    $('chatlog').scrollTop = $('chatlog').scrollHeight;
+  }
+
+  // ---------- Google Identity / Calendar ----------
+  let tokenClient = null;
+  let accessToken = null;
+  let silentAttempt = false;
+
+  function initGoogle(){
+    const clientId = localStorage.getItem(LS.client);
+    if(!clientId || !window.google || !google.accounts) return;
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      callback: (resp)=>{
+        const wasSilent = silentAttempt;
+        silentAttempt = false;
+        if(resp.error){
+          setConnected(false);
+          if(!wasSilent) toast('구글 인증 실패: '+resp.error);
+          return;
+        }
+        accessToken = resp.access_token;
+        setConnected(true);
+        if(!wasSilent) toast('Google 캘린더 연결됨');
+        loadCalendarList();
+      }
+    });
+  }
+
+  // 페이지를 열 때 클라이언트 ID가 저장돼 있으면 자동으로(조용히) 연결을 시도합니다.
+  // 브라우저 팝업 차단 정책상 항상 성공하지는 않을 수 있고, 실패해도 에러를 띄우지 않습니다.
+  window.addEventListener('load', ()=>{
+    let tries = 0;
+    const iv = setInterval(()=>{
+      tries++;
+      if(!tokenClient) initGoogle();
+      if(tokenClient){
+        clearInterval(iv);
+        const clientId = localStorage.getItem(LS.client);
+        if(clientId){
+          silentAttempt = true;
+          setConnected('connecting');
+          tokenClient.requestAccessToken({prompt:''});
+        }
+      } else if(tries > 10){
+        clearInterval(iv);
+      }
+    }, 300);
+  });
+
+  function setConnected(state){
+    // state: true(연결됨) / false(미연결) / 'connecting'(연결 중)
+    const dot = $('gdot');
+    dot.classList.remove('on','connecting');
+    if(state === 'connecting'){
+      dot.classList.add('connecting');
+      $('gstatus').textContent = '연결 중…';
+    } else if(state){
+      dot.classList.add('on');
+      $('gstatus').textContent = '캘린더 연결됨';
+    } else {
+      $('gstatus').textContent = '캘린더 미연결';
+    }
+  }
+
+  $('btnGoogle').onclick = ()=>{
+    const clientId = localStorage.getItem(LS.client);
+    if(!clientId){ toast('설정에서 Google 클라이언트 ID를 먼저 입력하세요'); $('btnSettings').click(); return; }
+    if(!tokenClient) initGoogle();
+    silentAttempt = false;
+    if(tokenClient){
+      setConnected('connecting');
+      tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+    }
+  };
+
+  async function loadCalendarList(){
+    if(!accessToken) return;
+    try{
+      const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer', {
+        headers:{ 'Authorization':'Bearer '+accessToken }
+      });
+      if(!res.ok) return;
+      const data = await res.json();
+      const sel = $('dCalendar');
+      const prev = localStorage.getItem(LS.lastCalendar);
+      sel.innerHTML = '';
+      (data.items||[]).forEach(cal=>{
+        const opt = document.createElement('option');
+        opt.value = cal.id;
+        opt.textContent = cal.primary ? `${cal.summary} (기본)` : cal.summary;
+        sel.appendChild(opt);
+      });
+      if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+    }catch(e){ /* 목록 로드 실패 시 기본값 유지 */ }
+  }
+
+  async function createCalendarEvent(ev){
+    if(!accessToken){ throw new Error('먼저 Google 캘린더를 연결해주세요'); }
+    const body = {
+      summary: ev.title,
+      start: { dateTime: ev.startISO, timeZone: 'Asia/Seoul' },
+      end: { dateTime: ev.endISO, timeZone: 'Asia/Seoul' }
+    };
+    localStorage.setItem(LS.lastCalendar, ev.calendarId);
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(ev.calendarId)+'/events', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+accessToken, 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(res.status === 401){
+      accessToken = null; setConnected(false);
+      throw new Error('로그인이 만료되었습니다. 다시 연결해주세요');
+    }
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error('캘린더 등록 실패 ('+res.status+')');
+    }
+    return res.json();
+  }
+
+  // ---------- Claude parsing ----------
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function nowContext(){
+    const d = new Date();
+    const days = ['일','월','화','수','목','금','토'];
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} (${days[d.getDay()]}요일) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function askClaude(userText){
+    const apiKey = localStorage.getItem(LS.key);
+    if(!apiKey) throw new Error('설정에서 Anthropic API 키를 먼저 입력하세요');
+
+    const sys = `당신은 초등학교 교사를 돕는 일정 비서입니다. 사용자의 한국어 문장을 분석해서 캘린더 일정 정보를 추출하세요.
+현재 시각: ${nowContext()} (한국, Asia/Seoul)
+반드시 아래 JSON 형식으로만 답하세요. 다른 설명 텍스트를 절대 붙이지 마세요.
+
+일정을 명확히 추출할 수 있으면:
+{"status":"ok","title":"...","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM"}
+
+날짜/시간 등 정보가 부족해서 되물어야 하면:
+{"status":"ask","question":"짧은 되묻는 질문 한 문장"}
+
+규칙:
+- end_time이 언급 없으면 start_time+1시간으로 채우세요.
+- "다음주 화요일" 같은 상대 표현은 현재 시각 기준으로 정확한 날짜로 계산하세요.
+- title은 간결한 한국어 명사구로.`;
+
+    // include short recent context for follow-up corrections
+    const history = conversation.slice(-6);
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        system: sys,
+        messages: [...history, {role:'user', content:userText}]
+      })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error('Claude 호출 실패 ('+res.status+')');
+    }
+    const data = await res.json();
+    const text = (data.content||[]).map(b=>b.text||'').join('').trim();
+    conversation.push({role:'user', content:userText});
+    conversation.push({role:'assistant', content:text});
+    const clean = text.replace(/```json|```/g,'').trim();
+    try{ return JSON.parse(clean); }
+    catch(e){ throw new Error('분석 결과를 이해하지 못했습니다'); }
+  }
+
+  // ---------- Draft card ----------
+  let currentDraft = null;
+  function showDraft(d){
+    currentDraft = d;
+    $('dTitle').value = d.title || '';
+    $('dDate').value = d.date || '';
+    $('dStart').value = d.start_time || '';
+    $('dEnd').value = d.end_time || '';
+    if(accessToken) loadCalendarList();
+    $('draftCard').style.display = 'block';
+  }
+  $('btnCancelDraft').onclick = ()=>{ $('draftCard').style.display='none'; currentDraft=null; };
+
+  $('btnStamp').onclick = async ()=>{
+    const btn = $('btnStamp');
+    const ev = {
+      title: $('dTitle').value.trim() || '(제목 없음)',
+      calendarId: $('dCalendar').value || 'primary',
+      calendarLabel: $('dCalendar').options[$('dCalendar').selectedIndex]?.textContent || '기본 캘린더',
+      startISO: `${$('dDate').value}T${$('dStart').value}:00`,
+      endISO: `${$('dDate').value}T${$('dEnd').value}:00`
+    };
+    if(!$('dDate').value || !$('dStart').value){ toast('날짜와 시작 시간을 입력해주세요'); return; }
+    btn.disabled = true;
+    try{
+      const result = await createCalendarEvent(ev);
+      btn.classList.add('stamped');
+      setTimeout(()=>btn.classList.remove('stamped'), 450);
+      addLedgerItem(ev, result);
+      addMsg('bot', `<span class="tag">등록 완료</span>"${ev.title}" 일정을 "${ev.calendarLabel}"에 등록했습니다.`);
+      $('draftCard').style.display='none';
+      currentDraft=null;
+      toast('캘린더에 등록되었습니다');
+    }catch(e){
+      addMsg('bot', e.message, true);
+      toast(e.message);
+    }finally{
+      btn.disabled = false;
+    }
+  };
+
+  async function deleteCalendarEvent(calendarId, eventId){
+    if(!accessToken){ throw new Error('먼저 Google 캘린더를 연결해주세요'); }
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events/'+encodeURIComponent(eventId), {
+      method:'DELETE',
+      headers:{ 'Authorization':'Bearer '+accessToken }
+    });
+    if(res.status === 401){
+      accessToken = null; setConnected(false);
+      throw new Error('로그인이 만료되었습니다. 다시 연결해주세요');
+    }
+    if(!res.ok && res.status !== 410){
+      throw new Error('삭제 실패 ('+res.status+')');
+    }
+  }
+
+  // ---------- Ledger persistence ----------
+  function getLedgerArray(){
+    try{ return JSON.parse(localStorage.getItem(LS.ledger) || '[]'); }
+    catch(e){ return []; }
+  }
+  function saveLedgerArray(arr){
+    localStorage.setItem(LS.ledger, JSON.stringify(arr.slice(0,300)));
+  }
+  function todayStr(){
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function addLedgerItem(ev, result){
+    const record = {
+      id: result && result.id,
+      title: ev.title,
+      calendarId: ev.calendarId,
+      calendarLabel: ev.calendarLabel,
+      startISO: ev.startISO,
+      endISO: ev.endISO,
+      htmlLink: result && result.htmlLink
+    };
+    const arr = getLedgerArray();
+    arr.unshift(record);
+    saveLedgerArray(arr);
+    renderLedgerRow(record);
+  }
+
+  function renderLedgerRow(record){
+    const empty = document.querySelector('.ledger-empty');
+    if(empty) empty.remove();
+    const div = document.createElement('div');
+    div.className = 'ledger-item';
+    const dateStr = record.startISO.split('T')[0];
+    const st = record.startISO.split('T')[1].slice(0,5);
+    const et = record.endISO.split('T')[1].slice(0,5);
+    div.innerHTML = `
+      <div class="lt-title">${escapeHtml(record.title)}</div>
+      <div class="lt-when">${dateStr} · ${st}–${et}</div>
+      <div class="lt-loc">${escapeHtml(record.calendarLabel||'')}</div>
+      <div class="lt-actions">
+        ${record.htmlLink? `<a href="${record.htmlLink}" target="_blank" rel="noopener">캘린더에서 보기 →</a>`:''}
+        <button type="button" class="lt-delete">삭제</button>
+      </div>
+    `;
+    const delBtn = div.querySelector('.lt-delete');
+    delBtn.onclick = async ()=>{
+      if(!confirm(`"${record.title}" 일정을 삭제할까요?`)) return;
+      delBtn.disabled = true; delBtn.textContent = '삭제 중…';
+      try{
+        await deleteCalendarEvent(record.calendarId, record.id);
+        saveLedgerArray(getLedgerArray().filter(r=>r.id !== record.id));
+        div.remove();
+        if(!$('ledger').children.length){
+          $('ledger').innerHTML = '<div class="ledger-empty">아직 등록된 일정이 없습니다</div>';
+        }
+        toast('일정을 삭제했습니다');
+      }catch(e){
+        delBtn.disabled = false; delBtn.textContent = '삭제';
+        toast(e.message);
+      }
+    };
+    $('ledger').appendChild(div);
+  }
+
+  function restoreLedger(){
+    const t = todayStr();
+    const todays = getLedgerArray().filter(r => r.startISO && r.startISO.startsWith(t));
+    if(!todays.length) return;
+    document.querySelector('.ledger-empty')?.remove();
+    todays.forEach(renderLedgerRow);
+  }
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  // ---------- Send handler ----------
+  async function handleSend(){
+    const input = $('chatInput');
+    const text = input.value.trim();
+    if(!text) return;
+    addMsg('user', escapeHtml(text));
+    input.value = '';
+    $('btnSend').disabled = true;
+    addMsg('bot', '<span class="tag">분석 중</span>일정을 읽는 중입니다…');
+    const thinkingEl = $('chatlog').lastChild;
+    try{
+      const parsed = await askClaude(text);
+      thinkingEl.remove();
+      if(parsed.status === 'ask'){
+        addMsg('bot', escapeHtml(parsed.question));
+      } else if(parsed.status === 'ok'){
+        addMsg('bot', `<span class="tag">분석 완료</span>아래 내용으로 등록할까요? 필요하면 수정하세요.`);
+        showDraft(parsed);
+      } else {
+        addMsg('bot', '일정 형식을 이해하지 못했습니다. 다시 말씀해주세요.', true);
+      }
+    }catch(e){
+      thinkingEl.remove();
+      addMsg('bot', e.message, true);
+    }finally{
+      $('btnSend').disabled = false;
+    }
+  }
+  $('btnSend').onclick = handleSend;
+  $('chatInput').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }
+  });
+
+  // ---------- Init ----------
+  addMsg('bot', '<span class="tag">안내</span>일정을 편하게 말씀해주세요. 예: "다음주 화요일 오후 2시 학부모 상담"');
+  loadSettings();
+  restoreLedger();
+})();
+</script>
+</body>
+</html>
